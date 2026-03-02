@@ -9,6 +9,7 @@ type Feel = "soft" | "neutral" | "hard";
 type OffCenter = "never" | "sometimes" | "often";
 type Gender = "woman" | "man" | "kid";
 type WeightCat = "unknown" | "330-345" | "346-360" | "361-375" | "376+";
+type Budget = "no_limit" | "under_120" | "120_180" | "180_250" | "250_plus";
 
 type Racket = {
   id: string;
@@ -18,6 +19,7 @@ type Racket = {
   shape: "round" | "teardrop" | "diamond" | string;
   balance: "low" | "medium" | "high" | string;
   weight_g: number;
+  price_eur?: number;
 
   core: "soft" | "medium" | "hard" | string;
   sweet_spot: "large" | "medium" | "small" | string;
@@ -47,6 +49,7 @@ type Answers = {
   weightCat: WeightCat;
   sweetSpotPref: "large" | "normal" | "small";
   offCenter: OffCenter;
+  budget: Budget;
 };
 
 const DEFAULT: Answers = {
@@ -61,6 +64,7 @@ const DEFAULT: Answers = {
   weightCat: "unknown",
   sweetSpotPref: "large",
   offCenter: "sometimes",
+  budget: "no_limit",
 };
 
 function levelRank(l: string) {
@@ -81,7 +85,21 @@ function weightCatRange(cat: WeightCat): { min?: number; max?: number } {
       return {};
   }
 }
-
+function budgetMax(b: Budget): number | undefined {
+  switch (b) {
+    case "under_120":
+      return 120;
+    case "120_180":
+      return 180;
+    case "180_250":
+      return 250;
+    case "250_plus":
+      return undefined; // basically no max
+    case "no_limit":
+    default:
+      return undefined;
+  }
+}
 function inRange(w: number, min?: number, max?: number) {
   if (!Number.isFinite(w)) return false;
   if (min != null && w < min) return false;
@@ -466,6 +484,27 @@ export default function Page() {
       ),
     },
     {
+  id: "budget",
+  title: "What’s your budget?",
+  subtitle: "We’ll filter out rackets above your budget.",
+  render: (a, setA, next) => (
+    <OptionCards
+      value={a.budget}
+      onChange={(v) => {
+        setA({ ...a, budget: v as Budget });
+        next();
+      }}
+      options={[
+        { value: "no_limit", label: "No limit" },
+        { value: "under_120", label: "Under €120" },
+        { value: "120_180", label: "€120 – €180" },
+        { value: "180_250", label: "€180 – €250" },
+        { value: "250_plus", label: "€250+" },
+      ]}
+    />
+  ),
+},
+    {
       id: "sweetSpotPref",
       title: "Sweet spot preference?",
       subtitle: "Bigger sweet spot = more forgiving.",
@@ -509,7 +548,13 @@ export default function Page() {
   const progress = Math.round((Math.min(stepIndex, steps.length) / steps.length) * 100);
 
   const results = useMemo(() => {
-    const scored = rackets.map((r) => ({ r, ...scoreRacket(r, a) }));
+  const max = budgetMax(a.budget);
+
+const filtered = max
+  ? rackets.filter((r) => (r.price_eur ?? Infinity) <= max)
+  : rackets;
+
+const scored = filtered.map((r) => ({ r, ...scoreRacket(r, a) }));
     scored.sort((x, y) => y.score - x.score);
     return scored.slice(0, 5);
   }, [rackets, a]);
@@ -655,10 +700,6 @@ export default function Page() {
                       ))}
                     </div>
                   )}
-                </div>
-
-                <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-                  Tip: with only 1 racket in your sheet, the results can’t really “choose” yet. Add 10–30 rackets and this will feel much smarter.
                 </div>
               </>
             )}
